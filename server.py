@@ -1,7 +1,7 @@
 
-from flask import Flask
+from flask import Flask, request, abort
 import json
-from config import me, hello
+from config import me, db
 from mock_data import catalog
 
 app = Flask("Server")
@@ -36,17 +36,43 @@ def version():
         "developer": me
     }
 
-    hello()
-
+   
     return json.dumps(v)
+
 
 # get /api/catalog
 # return catlog as json
 
 
+def fix_id(obj):
+    obj["_id"] = str(obj["_id"]) 
+    return obj
+
+
 @app.get("/api/catalog")
 def get_catalog():
-    return json.dumps(catalog)
+    cursor = db.products.find({})
+    results =[]
+    for prod in cursor:
+        results.append(fix_id(prod))
+
+        return json.dumps(results)
+
+@app.post("/api/catalog")
+def save_product():
+    product = request.get_json()
+
+    if product is None:
+        return abort(400, "Product required")
+
+        #validate price, title, etc
+    db.products.insert_one(product)
+
+    # Solved the objectId Crash below this comment
+    product["_id"] = str(product["_id"])
+
+    return json.dumps(product)
+    
 
 
 # get /api/products/count
@@ -54,16 +80,23 @@ def get_catalog():
 
 @app.get("/api/products/count")
 def get_products_count():
-    return json.dumps(len(catalog))
+        count = db.products.count_documents({})
+        return json.dumps(count)
 
 
 @app.get("/api/products/total")
 def total_price():
     total = 0
-    for prod in catalog:
-        total += prod["price"]
-
+    cursor = db.products.find({})
+    for x in cursor:
+        total += x["price"]
+    
     return json.dumps(total)
+    
+    # for prod in catalog:
+    #     total += prod["price"]
+
+    # return json.dumps(total)
 
 
 # get /api/catalog/category
@@ -137,4 +170,4 @@ def count_color(color):
         return json.dumps(count)
 
 
-app.run(debug=True)
+# app.run(debug=True)

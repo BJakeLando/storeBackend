@@ -24,3 +24,7 @@ python -m pip install flask
 
 # run the server
 python server.py
+flask --app server --debug run (PROPER WAY OF STARTING FLASK)
+
+
+python -m pip install  pymongo  flask-pymongo "pymongo[srv]" certifi
