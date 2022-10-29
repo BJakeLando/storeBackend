@@ -1,8 +1,11 @@
 
+from os import remove
 from flask import Flask, request, abort
 import json
 from config import me, db
 from mock_data import catalog
+from bson import ObjectId
+
 
 app = Flask("Server")
 
@@ -36,7 +39,6 @@ def version():
         "developer": me
     }
 
-   
     return json.dumps(v)
 
 
@@ -45,18 +47,19 @@ def version():
 
 
 def fix_id(obj):
-    obj["_id"] = str(obj["_id"]) 
+    obj["_id"] = str(obj["_id"])
     return obj
 
 
 @app.get("/api/catalog")
 def get_catalog():
-    cursor = db.products.find({})
-    results =[]
+    cursor = db.products.find({}).sort("title")
+    results = []
     for prod in cursor:
         results.append(fix_id(prod))
 
         return json.dumps(results)
+
 
 @app.post("/api/catalog")
 def save_product():
@@ -65,23 +68,42 @@ def save_product():
     if product is None:
         return abort(400, "Product required")
 
-        #validate price, title, etc
+    product["category"] = product["category"].lower()
+
+    # validate price, title, etc
     db.products.insert_one(product)
 
     # Solved the objectId Crash below this comment
     product["_id"] = str(product["_id"])
 
     return json.dumps(product)
-    
 
+
+@app.put("/api/catalog")
+def update_product():
+    product = request.get_json()
+    id = product.pop("_id") #read and remove
+    # del product ["_id"] remove
+    db.products.update_one({"_id": ObjectId(id)}, {"$set": product})
+
+    return json.dumps("ok")
+
+
+
+@app.delete("/api/catalog/<id>")
+def delete_product(id):
+    res = db.products.delete_one({"_id": ObjectId(id)})
+    return json.dumps({"count": res.deleted_count})
 
 # get /api/products/count
 #  return the number of products in the catalog
 
 @app.get("/api/products/count")
 def get_products_count():
-        count = db.products.count_documents({})
-        return json.dumps(count)
+    count = db.products.count_documents({})
+    return json.dumps(count)
+
+
 
 
 @app.get("/api/products/total")
@@ -90,14 +112,23 @@ def total_price():
     cursor = db.products.find({})
     for x in cursor:
         total += x["price"]
-    
+
     return json.dumps(total)
-    
+
     # for prod in catalog:
     #     total += prod["price"]
 
     # return json.dumps(total)
 
+
+@app.get("/api/products/details/<id>")
+def get_details(id):
+  prod = db.products.find_one({"_id": ObjectId(id)})
+  if prod:
+    return json.dumps(fix_id(prod))
+
+  return abort(404, "Product not found")
+   
 
 # get /api/catalog/category
 # return all the products that belong to the received category
@@ -106,9 +137,13 @@ def total_price():
 def by_category(category):
 
     results = []
-    for prod in catalog:
-        if prod["category"].lower() == category.lower():
-            results.append(prod)
+    cursor = db.products.find({"category": category})
+    for prod in cursor:
+        results.append(fix_id(prod))
+
+    # for prod in catalog:
+    #     if prod["category"].lower() == category.lower():
+    #         results.append(prod)
 
     return json.dumps(results)
 
@@ -118,12 +153,27 @@ def by_category(category):
 @app.get("/api/catalog/lower/<float:amount>")
 def lower_than(amount):
     results = []
-    for prod in catalog:
-        if prod["price"] < float(amount):
-            results.append(prod)
+    cursor = db.products.find({"price": {"$lt": float(amount)}})
+    for prod in cursor:
+        results.append(fix_id(prod))
+    # for prod in catalog:
+    #     if prod["price"] < float(amount):
+
+    #         results.append(prod)
 
     return json.dumps(results)
 
+
+@app.get("/api/catalog/greater/<amount>")
+def greater_than(amount):
+    results = []
+    cursor = db.products.find({"price": {"$gte": float(amount)}})
+    for prod in cursor:
+        results.append(fix_id(prod))
+        # if prod["price"] > float(50):
+        #     results.append(prod)
+
+    return json.dumps(results)
 
 # get /api/category/unique
 # get the list of unique categories
@@ -132,42 +182,17 @@ def lower_than(amount):
 @app.get("/api/catalog/unique")
 def unique_cats():
     results = []
-    for prod in catalog:
+    cursor = db.products.distinct("category")
+    for cat in cursor:
+        results.append(cat)
+
+    #for prod in catalog:
         # if not category exist inside results
         # then add it
-        category = prod["category"]
-        if not category in results:
-            results.append(category)
+        # category = prod["category"]
+        # if not category in results:
+        #     results.append(category)
 
     return json.dumps(results)
-
-
-@app.get("/api/test/colors")
-def unique_colors():
-    colors = ["red", 'blue', "Pink", "yelloW", "Red",
-              "Black", "BLUE", "RED", "BLACK", "YELLOW"]
-
-    results = []
-    for color in colors:
-        color = color.lower()
-
-        if not color in results:
-            results.append(color)
-
-    return json.dumps(results)
-
-
-@app.get("/api/test/count/<color>")
-def count_color(color):
-    color= color.lower()
-    colors = ["red", 'blue', "Pink", "yelloW", "Red",
-              "Black", "BLUE", "RED", "BLACK", "YELLOW"]
-    count = 0
-    for item in colors:
-        if color == item.lower():
-            count += 1
-
-        return json.dumps(count)
-
 
 # app.run(debug=True)
