@@ -61,12 +61,40 @@ def get_catalog():
         return json.dumps(results)
 
 
+@app.get("/api/coupons")
+def get_coupons():
+    cursor = db.coupons.find({}).sort("title")
+    results = []
+    for coupon in cursor:
+        results.append(fix_id(coupon))
+
+        return json.dumps(results)
+
+
 @app.post("/api/catalog")
 def save_product():
     product = request.get_json()
 
     if product is None:
         return abort(400, "Product required")
+
+    if not "title" in product:
+        return abort(404, "Title Required")
+
+    if len(product["title"]) < 5:
+        return abort(400, "Minimum 5 characters required")
+
+    if not "category" in product:
+        return abort(400, "Please provide a category")
+    
+    if not "price" in product:
+        return abort(400, "Price is required")
+
+    if (not isinstance(product["price"], float)) and not isinstance(product["price"], int):
+        return abort(400, "Price must be a number")
+
+    if product["price"] < 1:
+        return abort(400, "Invalid price")
 
     product["category"] = product["category"].lower()
 
@@ -79,15 +107,46 @@ def save_product():
     return json.dumps(product)
 
 
+@app.get("/api/coupons/details/<code>")
+def get_couponCode(code):
+    coupon = db.coupons.find_one({"code": code})
+    if coupon:
+        fix_id(coupon)
+        return json.dumps(coupon)
+
+    return abort(404, "Invlaid code")
+
+
+@app.post("/api/coupons")
+def save_coupon():
+    coupon = request.get_json()
+
+    if not coupon:
+        return abort(400, "Coupon required")
+
+    if not "code" in coupon:
+        return abort(400, "Coupon code required")
+
+    if not "discount" in coupon:
+        return abort(400, "Discount is required")
+
+    if (not isinstance(coupon["discount"], float)) and not isinstance(coupon["discount"], int):
+        return abort(400, "Discount must be a number")
+
+    # validate coupon
+    db.coupons.insert_one(coupon)
+    fix_id(coupon)
+    return json.dumps(coupon)
+
+
 @app.put("/api/catalog")
 def update_product():
     product = request.get_json()
-    id = product.pop("_id") #read and remove
+    id = product.pop("_id")  # read and remove
     # del product ["_id"] remove
     db.products.update_one({"_id": ObjectId(id)}, {"$set": product})
 
     return json.dumps("ok")
-
 
 
 @app.delete("/api/catalog/<id>")
@@ -98,12 +157,11 @@ def delete_product(id):
 # get /api/products/count
 #  return the number of products in the catalog
 
+
 @app.get("/api/products/count")
 def get_products_count():
     count = db.products.count_documents({})
     return json.dumps(count)
-
-
 
 
 @app.get("/api/products/total")
@@ -123,12 +181,12 @@ def total_price():
 
 @app.get("/api/products/details/<id>")
 def get_details(id):
-  prod = db.products.find_one({"_id": ObjectId(id)})
-  if prod:
-    return json.dumps(fix_id(prod))
+    prod = db.products.find_one({"_id": ObjectId(id)})
+    if prod:
+        return json.dumps(fix_id(prod))
 
-  return abort(404, "Product not found")
-   
+    return abort(404, "Product not found")
+
 
 # get /api/catalog/category
 # return all the products that belong to the received category
@@ -186,7 +244,7 @@ def unique_cats():
     for cat in cursor:
         results.append(cat)
 
-    #for prod in catalog:
+    # for prod in catalog:
         # if not category exist inside results
         # then add it
         # category = prod["category"]
