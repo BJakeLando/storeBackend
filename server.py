@@ -5,10 +5,11 @@ import json
 from config import me, db
 from mock_data import catalog
 from bson import ObjectId
-
+from flask_cors import CORS
 
 app = Flask("Server")
-
+CORS(app) #disable CORS, enable on production
+# if you are running on debug mode, disable CORS
 
 @app.get("/")
 def home():
@@ -58,7 +59,7 @@ def get_catalog():
     for prod in cursor:
         results.append(fix_id(prod))
 
-        return json.dumps(results)
+    return json.dumps(results)
 
 
 @app.get("/api/coupons")
@@ -68,7 +69,7 @@ def get_coupons():
     for coupon in cursor:
         results.append(fix_id(coupon))
 
-        return json.dumps(results)
+    return json.dumps(results)
 
 
 @app.post("/api/catalog")
